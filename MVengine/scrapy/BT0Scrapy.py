@@ -1,12 +1,15 @@
 # -*-coding: utf-8-*-
 # !usr/bin/python
 import logging
+import random
 from logging.handlers import TimedRotatingFileHandler
 import requests
 import json
+import torndb
 import time
 from pyquery import PyQuery as pq
 import sys
+import base64
 
 # createTime: 2017-07-05 12:30:36
 # desc: bt0 website
@@ -30,19 +33,20 @@ class BT0Scrapy():
     def __init__(self):
         self.session = requests.session()
         self.timeout = 15
+        self.sql_conn = torndb.Connection("47.92.75.190:3306", "test", user="zanhao", password="zanhao1212")
 
     def main(self):
         self.requestSelectPage()
 
     def requestSelectPage(self):
-        self.session.headers[
-            'User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.115 Safari/537.36'
+        self.session.headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.115 Safari/537.36'
         self.session.headers['Accept-Encoding'] = 'gzip, deflate, sdch'
         self.session.headers['Accept-Language'] = 'zh-CN,zh;q=0.8'
-        self.session.headers[
-            'Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8'
-        resources_all = self.session.get('http://www.bt0.com/film-download/1-0-0-0-0-0.html', verify=False,
-                                         timeout=self.timeout)
+        self.session.headers['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8'
+        try:
+            resources_all = self.session.get('http://www.bt0.com/film-download/1-0-0-0-0-0.html', verify=False, timeout=self.timeout)
+        except Exception, e:
+            logging.info(e)
         b = pq(resources_all.content.encode('utf-8'))
         get_pageNums = b('ul[class="tsc_pagination tsc_paginationA tsc_paginationA06"] li')
         page_nums = None
@@ -50,9 +54,12 @@ class BT0Scrapy():
             judge = b('li', nums).text()
             if '.' in judge:
                 page_nums = judge.replace('.', '')
-        for x in xrange(0, int(page_nums)):
-            new_page = self.session.get('http://www.bt0.com/film-download/1-0-0-0-0-%s.html' % str(x),
-                                        timeout=self.timeout)
+        for x in xrange(40, int(page_nums)):
+            try:
+                logging.info('current page number: %s' % str(x))
+                new_page = self.session.get('http://www.bt0.com/film-download/1-0-0-0-0-%s.html' % str(x), timeout=self.timeout)
+            except Exception, e:
+                logging.info(e)
             b = pq(new_page.content)
             movie_detail_list = self.movie_detail(b)
             for movie in movie_detail_list:
@@ -64,7 +71,35 @@ class BT0Scrapy():
                     magnetic_link = b('div[class="container"] div:eq(3) a', link).attr('href')
                     link_list.append(magnetic_link)
                 movie['link_list'] = link_list
-            print json.dumps(movie_detail_list)
+            logging.info(json.dumps(movie_detail_list))
+            self.mysql_insert(movie_detail_list)
+            time.sleep(random.randint(15, 30))
+
+    def mysql_insert(self, result):
+        for tr in result:
+            judge = self.search_mysql(tr)
+            if judge:
+                continue
+            a = '\n'.join(tr['link_list'])
+            link_msg = base64.b64encode(a)
+            insert_sql = "INSERT INTO `mv_msg`(movie_name, new_name, origin, image, origin_year, movie_time, movie_type, link_msg, movie_url) VALUES('%s', '%s','%s','%s','%s','%s','%s','%s','%s');" % (tr['movie_name'], tr['new_name'], tr['origin'], tr['image'], tr['origin_year'], tr['movie_time'], tr['movie_type'], link_msg, tr['movie_url'])
+            try:
+                self.sql_conn.execute(insert_sql)
+                logging.info('insert into data success!!!')
+            except Exception, e:
+                logging.info(e)
+
+    def search_mysql(self, data):
+        sel_sql = "SELECT * FROM `mv_msg` WHERE movie_name='%s';" % (data['movie_name'])
+        result = []
+        try:
+            result = self.sql_conn.query(sel_sql)
+        except Exception, e:
+            logging.info(e)
+        if len(result) >= 1:
+            logging.info('the data had in mysql!')
+            return 1
+        return 0
 
     def movie_detail(self, b):
         div_list = b('div[class="masonry__container"] div')
@@ -86,7 +121,8 @@ class BT0Scrapy():
                         for x in xrange(index + 1, len(movie_msg)):
                             if movie_msg[index + x] in type_list:
                                 break
-                            detail_dict['new_name'] = new_name + movie_msg[index + x]
+                            new_name = new_name + movie_msg[index + x]+' '
+                        detail_dict['new_name'] = new_name
                 elif u'类型:' in mov_msg:
                     detail_dict['movie_type'] = movie_msg[index + 1] = movie_msg[index + 1]
                 elif u'片长:' in mov_msg:
