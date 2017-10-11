@@ -30,7 +30,7 @@ def config_log():
 
 class defaultsetting():
     def __init__(self):
-        self.sql_conn = torndb.Connection("policy.tripto.cn:3306", "test", user="zanhao", password="zanhao1212")
+        self.sql_conn = torndb.Connection("127.0.0.1:3306", "test", user="root", password="root_pwd")
 
 
 class baseHandler(tornado.web.RequestHandler):

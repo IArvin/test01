@@ -5,4 +5,4 @@ import torndb
 
 class defaultAetting():
     def __init__(self):
-        self.sql_conn = torndb.Connection("47.92.75.190:3306", "test", user="zanhao", password="zanhao1212")
+        self.sql_conn = torndb.Connection("127.0.0.1:3306", "test", user="root", password="root_pwd")

@@ -33,7 +33,7 @@ class BT0Scrapy():
     def __init__(self):
         self.session = requests.session()
         self.timeout = 15
-        self.sql_conn = torndb.Connection("47.92.75.190:3306", "test", user="zanhao", password="zanhao1212")
+        self.sql_conn = torndb.Connection("127.0.0.1:3306", "test", user="root", password="root_pwd")
 
     def main(self):
         self.requestSelectPage()
