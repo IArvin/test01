@@ -33,7 +33,7 @@ class BT0Scrapy():
     def __init__(self):
         self.session = requests.session()
         self.timeout = 15
-        self.sql_conn = torndb.Connection("127.0.0.1:3306", "test", user="root", password="root_pwd")
+        self.sql_conn = torndb.Connection("127.0.0.1:3306", "movie", user="root", password="zanhao1212")
 
     def main(self):
         self.requestSelectPage()
@@ -54,7 +54,7 @@ class BT0Scrapy():
             judge = b('li', nums).text()
             if '.' in judge:
                 page_nums = judge.replace('.', '')
-        for x in xrange(40, int(page_nums)):
+        for x in xrange(2, int(page_nums)):
             try:
                 logging.info('current page number: %s' % str(x))
                 new_page = self.session.get('http://www.bt0.com/film-download/1-0-0-0-0-%s.html' % str(x), timeout=self.timeout)
@@ -63,7 +63,10 @@ class BT0Scrapy():
             b = pq(new_page.content)
             movie_detail_list = self.movie_detail(b)
             for movie in movie_detail_list:
-                response = self.session.get(movie['movie_url'], timeout=self.timeout)
+                try:
+                    response = self.session.get(movie['movie_url'], timeout=self.timeout)
+                except Exception, e:
+                    logging.info(e)
                 b = pq(response.content)
                 magnetic_link_list = b('div[class="picture-container"] div[class="container"]')
                 link_list = []
@@ -83,6 +86,7 @@ class BT0Scrapy():
             a = '\n'.join(tr['link_list'])
             link_msg = base64.b64encode(a)
             insert_sql = "INSERT INTO `mv_msg`(movie_name, new_name, origin, image, origin_year, movie_time, movie_type, link_msg, movie_url) VALUES('%s', '%s','%s','%s','%s','%s','%s','%s','%s');" % (tr['movie_name'], tr['new_name'], tr['origin'], tr['image'], tr['origin_year'], tr['movie_time'], tr['movie_type'], link_msg, tr['movie_url'])
+            print insert_sql
             try:
                 self.sql_conn.execute(insert_sql)
                 logging.info('insert into data success!!!')
@@ -107,7 +111,7 @@ class BT0Scrapy():
         detail_list = []
         for div in div_list:
             detail_dict = {}
-            detail_dict['image'] = b('img', div).attr('src')
+            detail_dict['image'] = b('img', div).attr('data-original')
             detail_dict['movie_name'] = b('img', div).attr('alt')
             movie_msg = b('p', div).text().split(' ')
             detail_dict['movie_url'] = 'http://www.bt0.com' + b('a', div).attr('href')
